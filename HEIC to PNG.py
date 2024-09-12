@@ -12,12 +12,13 @@ class ImageConverterApp(tk.Frame):
         super().__init__(master)
         self.master = master
         self.master.geometry("600x220")
-        self.master.title("Conversor de HEIC a Otros Formatos")
-        
+        self.master.resizable(False, False)  # Deshabilita maximización
+        self.master.title("Conversor de Formatos de Imagen")
+
         # Aplicar estilo moderno con ttk
         style = ttk.Style()
         style.theme_use('clam')
-        
+
         self.create_widgets()
 
     def create_widgets(self):
@@ -26,11 +27,12 @@ class ImageConverterApp(tk.Frame):
         self.frame_top.pack(padx=10, pady=10, fill=tk.X)
 
         # Etiqueta y campo de entrada para directorio
-        self.label_directory = ttk.Label(self.frame_top, text="Directorio de imágenes HEIC:")
+        self.label_directory = ttk.Label(self.frame_top, text="Directorio de imágenes:")
         self.label_directory.grid(row=0, column=0, padx=5, pady=5, sticky="e")
 
         self.entry_directory = ttk.Entry(self.frame_top, width=50)
         self.entry_directory.grid(row=0, column=1, padx=5, pady=5)
+        self.entry_directory.bind("<KeyRelease>", self.check_convert_button_state)
 
         self.button_browse = ttk.Button(self.frame_top, text="Examinar", command=self.select_directory)
         self.button_browse.grid(row=0, column=2, padx=5, pady=5)
@@ -45,10 +47,10 @@ class ImageConverterApp(tk.Frame):
         self.format_combobox.bind("<<ComboboxSelected>>", self.toggle_quality_option)
 
         self.label_quality = ttk.Label(self.frame_top, text="Calidad JPEG (1-100):")
-        self.label_quality.grid(row=3, column=0, padx=5, pady=5, sticky="e")
+        self.label_quality.grid(row=2, column=0, padx=5, pady=5, sticky="e")
 
         self.spin_quality = ttk.Spinbox(self.frame_top, from_=1, to=100, width=5)
-        self.spin_quality.grid(row=3, column=1, padx=5, pady=5)
+        self.spin_quality.grid(row=2, column=1, padx=5, pady=5)
         self.spin_quality.set(85)
         self.spin_quality.config(state=tk.DISABLED)
 
@@ -56,20 +58,30 @@ class ImageConverterApp(tk.Frame):
         self.frame_buttons = ttk.Frame(self.master)
         self.frame_buttons.pack(pady=10)
 
-        self.button_convert = ttk.Button(self.frame_buttons, text="Convertir", command=self.start_conversion)
+        self.button_convert = ttk.Button(self.frame_buttons, text="Convertir", command=self.start_conversion, state=tk.DISABLED)
         self.button_convert.grid(row=0, column=0, padx=20)
 
         self.button_cancel = ttk.Button(self.frame_buttons, text="Cancelar", command=self.cancel_conversion, state=tk.DISABLED)
         self.button_cancel.grid(row=0, column=1, padx=20)
 
-        # Etiquetas de estado
-        self.status_label = ttk.Label(self.master, text="Listo para convertir.", relief=tk.SUNKEN, anchor=tk.W)
-        self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+        # Etiquetas de estado en la misma línea
+        self.frame_status = ttk.Frame(self.master)
+        self.frame_status.pack(fill=tk.X)
 
-        self.completed_label = ttk.Label(self.master, text="Imágenes completadas: 0/0", relief=tk.SUNKEN, anchor=tk.W)
-        self.completed_label.pack(side=tk.BOTTOM, fill=tk.X)
+        self.completed_label = ttk.Label(self.frame_status, text="Imágenes completadas: 0/0", relief=tk.SUNKEN, anchor=tk.W)
+        self.completed_label.grid(row=0, column=0, padx=5, pady=5)
+
+        self.status_label = ttk.Label(self.frame_status, text="Listo para convertir.", relief=tk.SUNKEN, anchor=tk.W)
+        self.status_label.grid(row=0, column=1, padx=5, pady=5, sticky="e")
 
         self.progressbar = ttk.Progressbar(self.master, orient=tk.HORIZONTAL, mode='determinate', length=580)
+
+    # Función para verificar si el botón de convertir debe estar habilitado
+    def check_convert_button_state(self, event=None):
+        if self.entry_directory.get().strip():
+            self.button_convert.config(state=tk.NORMAL)
+        else:
+            self.button_convert.config(state=tk.DISABLED)
 
     # Funciones principales
     def select_directory(self):
@@ -77,6 +89,7 @@ class ImageConverterApp(tk.Frame):
         if directory:
             self.entry_directory.delete(0, tk.END)
             self.entry_directory.insert(0, directory)
+        self.check_convert_button_state()
 
     def toggle_quality_option(self, event):
         if self.format_combobox.get().strip().upper() == 'JPEG':
@@ -91,7 +104,7 @@ class ImageConverterApp(tk.Frame):
             return
 
         output_format = self.format_combobox.get().strip().upper()
-        if output_format not in ["PNG", "JPEG", "BMP", "GIF", "TIFF"]:
+        if output_format not in ["HEIC", "PNG", "JPEG", "BMP", "GIF", "TIFF"]:
             messagebox.showerror("Error", "Formato de salida no válido.")
             return
 
@@ -115,12 +128,12 @@ class ImageConverterApp(tk.Frame):
         global running
         running = True
         output_directory = self.create_output_directory(directory)
-        heic_files = self.get_heic_files(directory)
-        if not heic_files:
-            messagebox.showinfo("Información", "No se encontraron archivos HEIC en el directorio especificado.")
+        image_files = self.get_image_files(directory)
+        if not image_files:
+            messagebox.showinfo("Información", "No se encontraron archivos de imagen en el directorio especificado.")
             return
 
-        self.progressbar["maximum"] = len(heic_files)
+        self.progressbar["maximum"] = len(image_files)
         self.progressbar["value"] = 0
         self.progressbar.pack(pady=10)
 
@@ -131,7 +144,7 @@ class ImageConverterApp(tk.Frame):
         start_time = time.time()
 
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_file = {executor.submit(self.convert_heic_to_format, filepath, output_directory, output_format, quality): filepath for filepath in heic_files}
+            future_to_file = {executor.submit(self.convert_image, filepath, output_directory, output_format, quality): filepath for filepath in image_files}
             for i, future in enumerate(as_completed(future_to_file), start=1):
                 if not running:
                     break
@@ -139,7 +152,7 @@ class ImageConverterApp(tk.Frame):
                     success, message = future.result()
                     self.status_label.config(text=f"Procesando: {os.path.basename(future_to_file[future])}")
                     self.progressbar["value"] += 1
-                    self.completed_label.config(text=f"Imágenes completadas: {i}/{len(heic_files)}")
+                    self.completed_label.config(text=f"Imágenes completadas: {i}/{len(image_files)}")
                     self.master.update_idletasks()
                     if success:
                         successful_conversions += 1
@@ -158,8 +171,9 @@ class ImageConverterApp(tk.Frame):
         messagebox.showinfo("Resumen", summary)
         self.status_label.config(text=f"Conversión completada en {time_str}.")
 
-    def get_heic_files(self, directory):
-        return [os.path.join(directory, filename) for filename in os.listdir(directory) if filename.lower().endswith(".heic")]
+    def get_image_files(self, directory):
+        valid_extensions = ['.heic', '.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff']
+        return [os.path.join(directory, filename) for filename in os.listdir(directory) if os.path.splitext(filename)[1].lower() in valid_extensions]
 
     def create_output_directory(self, directory):
         output_directory = os.path.join(directory, 'converted_images')
@@ -167,14 +181,21 @@ class ImageConverterApp(tk.Frame):
             os.makedirs(output_directory)
         return output_directory
 
-    def convert_heic_to_format(self, filepath, output_directory, output_format, quality=85):
+    def convert_image(self, filepath, output_directory, output_format, quality=85):
         filename = os.path.basename(filepath)
         new_filename = os.path.splitext(filename)[0] + f".{output_format.lower()}"
         new_filepath = os.path.join(output_directory, new_filename)
 
         try:
-            heif_file = pillow_heif.read_heif(filepath)
-            image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
+            if filepath.lower().endswith(".heic"):
+                # Si es HEIC, convertir desde HEIC a otros formatos
+                heif_file = pillow_heif.read_heif(filepath)
+                image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
+            else:
+                # Si es otro formato, abrir con PIL y convertir a HEIC o el formato seleccionado
+                image = Image.open(filepath)
+            
+            # Guardar la imagen en el formato seleccionado
             if output_format == 'JPEG':
                 image.save(new_filepath, format=output_format, quality=quality)
             else:
