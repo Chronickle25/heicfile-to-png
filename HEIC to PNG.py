@@ -33,7 +33,7 @@ class ImageConverterApp(ttk.Frame):
         super().__init__(master)
         self.master = master
         self.master.title("Conversor de Formatos de Imagen")
-        self.master.geometry("720x450")
+        self.master.geometry("720x350")
         self.master.resizable(True, True)
         self.setup_style()
         self.create_widgets()
@@ -241,6 +241,15 @@ class ImageConverterApp(ttk.Frame):
                     return False, "HEIC no soportado (instalar pillow_heif)"
                 heif_file = pillow_heif.read_heif(filepath)
                 image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
+                
+                # Prepara los argumentos de guardado
+                save_args = {'format': output_format}
+                if output_format == 'JPEG':
+                    save_args['quality'] = quality
+                    if image.mode in ('RGBA', 'LA'):
+                        image = image.convert('RGB')
+                
+                image.save(output_path, **save_args)
             else:
                 with Image.open(filepath) as image:
                     save_args = {'format': output_format}
